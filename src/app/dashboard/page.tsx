@@ -8,7 +8,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">{t("dashboard")}</h1>
+      <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{t("dashboard")}</h1>
       <TasksTable />
     </div>
   );

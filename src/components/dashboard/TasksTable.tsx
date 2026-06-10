@@ -63,7 +63,7 @@ export function TasksTable() {
 
   if (tasks.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-gray-300 p-12 text-center">
+      <div className="rounded-lg border border-dashed border-gray-300 p-8 sm:p-12 text-center">
         <p className="text-gray-600">{t("noTasks")}</p>
         <Link
           href="/dashboard/create"
@@ -77,7 +77,76 @@ export function TasksTable() {
 
   return (
     <>
-      <div className="overflow-x-auto rounded-lg border border-gray-200">
+      {/* Mobile: cards */}
+      <div className="space-y-3 md:hidden">
+        {tasks.map((task) => (
+          <div
+            key={task.id}
+            className="rounded-lg border border-gray-200 bg-white p-4 space-y-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="font-medium text-gray-900 break-words">
+                  {task.title}
+                </h3>
+                <p className="mt-1 text-sm text-gray-600">{task.student_name}</p>
+              </div>
+              <StatusBadge status={task.status} />
+            </div>
+
+            <p className="text-xs text-gray-500">
+              {t("createdAt")}: {formatDate(task.created_at, locale)}
+            </p>
+
+            <div className="flex items-center gap-2 rounded-md bg-gray-50 p-2">
+              <code className="min-w-0 flex-1 truncate text-xs text-gray-500">
+                /task/{task.slug}
+              </code>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="shrink-0"
+                onClick={() => handleCopy(task.slug)}
+              >
+                {copiedSlug === task.slug ? t("copied") : t("copyLink")}
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <a
+                href={getTaskUrl(task.slug)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="col-span-1"
+              >
+                <Button variant="secondary" size="sm" className="w-full">
+                  {t("open")}
+                </Button>
+              </a>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full"
+                onClick={() => setDuplicateId(task.id)}
+              >
+                {t("duplicate")}
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                className="w-full"
+                onClick={() => handleDelete(task.id)}
+                disabled={deleteId === task.id}
+              >
+                {t("delete")}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
             <tr>

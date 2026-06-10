@@ -18,32 +18,32 @@ export function DashboardHeader() {
 
   return (
     <header className="border-b border-gray-200 bg-white">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-        <div className="flex items-center gap-6">
-          <Link href="/dashboard" className="text-lg font-semibold text-gray-900">
+      <div className="mx-auto max-w-6xl px-4 py-3 sm:py-4">
+        <div className="flex items-center justify-between gap-3">
+          <Link href="/dashboard" className="text-lg font-semibold text-gray-900 shrink-0">
             {t("appName")}
           </Link>
-          <nav className="flex gap-4 text-sm">
-            <Link
-              href="/dashboard"
-              className="text-gray-600 hover:text-gray-900"
-            >
-              {t("dashboard")}
-            </Link>
-            <Link
-              href="/dashboard/create"
-              className="text-gray-600 hover:text-gray-900"
-            >
-              {t("createTask")}
-            </Link>
-          </nav>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <LanguageSwitcher />
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+              {t("signOut")}
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <LanguageSwitcher />
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            {t("signOut")}
-          </Button>
-        </div>
+        <nav className="mt-3 flex gap-4 text-sm border-t border-gray-100 pt-3">
+          <Link
+            href="/dashboard"
+            className="text-gray-600 hover:text-gray-900"
+          >
+            {t("dashboard")}
+          </Link>
+          <Link
+            href="/dashboard/create"
+            className="text-gray-600 hover:text-gray-900"
+          >
+            {t("createTask")}
+          </Link>
+        </nav>
       </div>
     </header>
   );
