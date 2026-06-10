@@ -61,7 +61,7 @@ npm run dev
    - **Framework Preset:** Next.js
    - **Root Directory:** `.` (корень репозитория, не подпапка)
    - **Build Command:** `npm run build` (по умолчанию)
-   - **Output Directory:** оставить пустым (Next.js сам)
+   - **Output Directory:** выключить Override и оставить **пустым** (не `public`!)
 4. Добавьте переменные окружения (те же, что в `.env.local`):
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
