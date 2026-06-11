@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getNextStatus } from "@/lib/utils";
+import { getNextStatus, mergeAnswers } from "@/lib/utils";
 import type { SaveAnswersInput } from "@/types";
 
 interface RouteParams {
@@ -39,7 +39,17 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     );
   }
 
-  const hasAnswers = Object.keys(body.answers).length > 0;
+  const { data: existingRow } = await supabase
+    .from("task_answers")
+    .select("answers")
+    .eq("task_id", task.id)
+    .single();
+
+  const existingAnswers =
+    (existingRow?.answers as Record<string, unknown>) || {};
+  const mergedAnswers = mergeAnswers(existingAnswers, body.answers);
+
+  const hasAnswers = Object.keys(mergedAnswers).length > 0;
   const newStatus = getNextStatus(task.status, hasAnswers);
 
   const { error: answersError } = await supabase
@@ -47,7 +57,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     .upsert(
       {
         task_id: task.id,
-        answers: body.answers,
+        answers: mergedAnswers,
       },
       { onConflict: "task_id" }
     );

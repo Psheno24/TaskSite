@@ -10,9 +10,11 @@ export const BRIDGE_SCRIPT = `
   var pollTimer = null;
   var isReadOnly = false;
   var isRestoring = false;
+  var allowSave = false;
   var lastSnapshot = "";
   var bridgeIdCounter = 0;
   var pendingAnswers = null;
+  var restoreTimer = null;
 
   function isContentEditable(el) {
     return el.getAttribute && el.getAttribute("contenteditable") === "true";
@@ -397,12 +399,43 @@ export const BRIDGE_SCRIPT = `
     }
   }
 
+  function buildMergedAnswers() {
+    var collected = collectAnswers();
+    var answers = {};
+    var key;
+
+    if (pendingAnswers && typeof pendingAnswers === "object") {
+      for (key in pendingAnswers) {
+        if (Object.prototype.hasOwnProperty.call(pendingAnswers, key)) {
+          answers[key] = pendingAnswers[key];
+        }
+      }
+    }
+
+    for (key in collected) {
+      if (Object.prototype.hasOwnProperty.call(collected, key)) {
+        answers[key] = collected[key];
+      }
+    }
+
+    return answers;
+  }
+
+  function scheduleAllowSave() {
+    if (restoreTimer) clearTimeout(restoreTimer);
+    restoreTimer = setTimeout(function () {
+      allowSave = true;
+      lastSnapshot = JSON.stringify(buildMergedAnswers());
+    }, 2500);
+  }
+
   function sendAnswers() {
-    if (isReadOnly || isRestoring) return;
-    var answers = collectAnswers();
+    if (isReadOnly || isRestoring || !allowSave) return;
+    var answers = buildMergedAnswers();
     var snapshot = JSON.stringify(answers);
     if (snapshot === lastSnapshot) return;
     lastSnapshot = snapshot;
+    pendingAnswers = answers;
     window.parent.postMessage({
       type: "ANSWERS_CHANGED",
       answers: answers
@@ -420,8 +453,9 @@ export const BRIDGE_SCRIPT = `
     if (!data || typeof data !== "object") return;
 
     if (data.type === "RESTORE_ANSWERS") {
+      allowSave = false;
       applyAnswers(data.answers, false);
-      lastSnapshot = JSON.stringify(collectAnswers());
+      scheduleAllowSave();
     }
 
     if (data.type === "SET_READONLY") {
@@ -429,7 +463,10 @@ export const BRIDGE_SCRIPT = `
     }
 
     if (data.type === "REQUEST_ANSWERS") {
+      var prevAllow = allowSave;
+      allowSave = true;
       sendAnswers();
+      allowSave = prevAllow;
     }
   }
 
@@ -474,7 +511,7 @@ export const BRIDGE_SCRIPT = `
   function init() {
     window.parent.postMessage({ type: "TASK_READY" }, "*");
     pollTimer = setInterval(sendAnswers, POLL_MS);
-    setTimeout(notifyChange, 1000);
+    scheduleAllowSave();
   }
 
   if (document.readyState === "loading") {

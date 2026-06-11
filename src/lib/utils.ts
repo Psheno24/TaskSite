@@ -34,6 +34,13 @@ export function isValidUuid(value: string): boolean {
   );
 }
 
+export function mergeAnswers(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>
+): Record<string, unknown> {
+  return { ...existing, ...incoming };
+}
+
 export function getNextStatus(
   current: TaskStatus,
   hasAnswers: boolean

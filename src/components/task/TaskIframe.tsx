@@ -50,6 +50,13 @@ export function TaskIframe({
   }, [initialAnswers, isReady, readOnly, sendToIframe]);
 
   useEffect(() => {
+    const flushSave = () => {
+      sendToIframe({ type: "REQUEST_ANSWERS" });
+    };
+
+    window.addEventListener("pagehide", flushSave);
+    window.addEventListener("beforeunload", flushSave);
+
     const handleMessage = async (event: MessageEvent) => {
       const data = event.data;
       if (!data || typeof data !== "object") return;
@@ -80,6 +87,8 @@ export function TaskIframe({
     window.addEventListener("message", handleMessage);
     return () => {
       window.removeEventListener("message", handleMessage);
+      window.removeEventListener("pagehide", flushSave);
+      window.removeEventListener("beforeunload", flushSave);
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [onAnswersChange, readOnly, sendToIframe]);

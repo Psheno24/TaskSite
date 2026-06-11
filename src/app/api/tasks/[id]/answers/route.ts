@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireTeacher } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { getNextStatus, isValidUuid } from "@/lib/utils";
+import { getNextStatus, isValidUuid, mergeAnswers } from "@/lib/utils";
 import type { SaveAnswersInput } from "@/types";
 
 interface RouteParams {
@@ -36,7 +36,17 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    const hasAnswers = Object.keys(body.answers).length > 0;
+    const { data: existingRow } = await supabase
+      .from("task_answers")
+      .select("answers")
+      .eq("task_id", id)
+      .single();
+
+    const existingAnswers =
+      (existingRow?.answers as Record<string, unknown>) || {};
+    const mergedAnswers = mergeAnswers(existingAnswers, body.answers);
+
+    const hasAnswers = Object.keys(mergedAnswers).length > 0;
     const newStatus = getNextStatus(task.status, hasAnswers);
 
     const { error: answersError } = await supabase
@@ -44,7 +54,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       .upsert(
         {
           task_id: id,
-          answers: body.answers,
+          answers: mergedAnswers,
         },
         { onConflict: "task_id" }
       );
