@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { ApiError, handleRouteError } from "@/lib/api-utils";
 import { requireTeacher } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createTaskSlug, isValidUuid } from "@/lib/utils";
@@ -13,16 +13,13 @@ export async function POST(request: Request, { params }: RouteParams) {
     const { id } = await params;
 
     if (!isValidUuid(id)) {
-      return NextResponse.json({ error: "Invalid task id" }, { status: 400 });
+      throw new ApiError(400, "Invalid task id");
     }
 
     const body = (await request.json()) as DuplicateTaskInput;
 
     if (!body.student_name?.trim()) {
-      return NextResponse.json(
-        { error: "student_name is required" },
-        { status: 400 }
-      );
+      throw new ApiError(400, "student_name is required");
     }
 
     const teacher = await requireTeacher();
@@ -36,7 +33,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       .single();
 
     if (fetchError || !original) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      throw new ApiError(404, "Task not found");
     }
 
     const slug = createTaskSlug();
@@ -55,10 +52,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       .single();
 
     if (taskError || !task) {
-      return NextResponse.json(
-        { error: taskError?.message || "Failed to duplicate task" },
-        { status: 500 }
-      );
+      throw new ApiError(500, taskError?.message || "Failed to duplicate task");
     }
 
     const { error: answersError } = await supabase
@@ -70,11 +64,11 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     if (answersError) {
       await supabase.from("tasks").delete().eq("id", task.id);
-      return NextResponse.json({ error: answersError.message }, { status: 500 });
+      throw new ApiError(500, answersError.message);
     }
 
-    return NextResponse.json(task, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return Response.json(task, { status: 201 });
+  } catch (error) {
+    return handleRouteError(error);
   }
 }

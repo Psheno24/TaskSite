@@ -378,7 +378,7 @@ export const BRIDGE_SCRIPT = `
     var fields = getAllFields();
     fields.forEach(function (el) {
       if (isContentEditable(el)) {
-        if (isReadOnly) el.contentEditable = "false";
+        el.contentEditable = isReadOnly ? "false" : "true";
         return;
       }
       var type = (el.type || "").toLowerCase();
@@ -392,11 +392,9 @@ export const BRIDGE_SCRIPT = `
       }
     });
 
-    if (isReadOnly) {
-      document.querySelectorAll("button").forEach(function (btn) {
-        if (isQuizOptionButton(btn)) btn.disabled = true;
-      });
-    }
+    document.querySelectorAll("button").forEach(function (btn) {
+      if (isQuizOptionButton(btn)) btn.disabled = isReadOnly;
+    });
   }
 
   function buildMergedAnswers() {

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { ApiError, handleRouteError } from "@/lib/api-utils";
 import { requireTeacher } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isValidUuid } from "@/lib/utils";
@@ -13,7 +13,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const { id } = await params;
 
     if (!isValidUuid(id)) {
-      return NextResponse.json({ error: "Invalid task id" }, { status: 400 });
+      throw new ApiError(400, "Invalid task id");
     }
 
     const teacher = await requireTeacher();
@@ -27,7 +27,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       .single();
 
     if (taskError || !task) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      throw new ApiError(404, "Task not found");
     }
 
     const { data: answersRow } = await supabase
@@ -36,13 +36,13 @@ export async function GET(_request: Request, { params }: RouteParams) {
       .eq("task_id", id)
       .single();
 
-    return NextResponse.json({
+    return Response.json({
       ...task,
       answers: (answersRow?.answers as TaskAnswers) || {},
       answers_updated_at: answersRow?.updated_at || null,
     });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    return handleRouteError(error);
   }
 }
 
@@ -51,24 +51,29 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     const { id } = await params;
 
     if (!isValidUuid(id)) {
-      return NextResponse.json({ error: "Invalid task id" }, { status: 400 });
+      throw new ApiError(400, "Invalid task id");
     }
 
     const teacher = await requireTeacher();
     const supabase = await createClient();
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("tasks")
       .delete()
       .eq("id", id)
-      .eq("teacher_id", teacher.id);
+      .eq("teacher_id", teacher.id)
+      .select("id");
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      throw new ApiError(500, error.message);
     }
 
-    return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!data || data.length === 0) {
+      throw new ApiError(404, "Task not found");
+    }
+
+    return Response.json({ success: true });
+  } catch (error) {
+    return handleRouteError(error);
   }
 }

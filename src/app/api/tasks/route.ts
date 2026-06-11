@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { ApiError, handleRouteError, MAX_HTML_SIZE } from "@/lib/api-utils";
 import { requireTeacher } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createTaskSlug } from "@/lib/utils";
@@ -16,12 +16,12 @@ export async function GET() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      throw new ApiError(500, error.message);
     }
 
-    return NextResponse.json(tasks);
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return Response.json(tasks);
+  } catch (error) {
+    return handleRouteError(error);
   }
 }
 
@@ -31,10 +31,11 @@ export async function POST(request: Request) {
     const body = (await request.json()) as CreateTaskInput;
 
     if (!body.title?.trim() || !body.student_name?.trim() || !body.html_content?.trim()) {
-      return NextResponse.json(
-        { error: "title, student_name and html_content are required" },
-        { status: 400 }
-      );
+      throw new ApiError(400, "title, student_name and html_content are required");
+    }
+
+    if (body.html_content.length > MAX_HTML_SIZE) {
+      throw new ApiError(400, "HTML content exceeds maximum size");
     }
 
     const supabase = await createClient();
@@ -54,10 +55,7 @@ export async function POST(request: Request) {
       .single();
 
     if (taskError || !task) {
-      return NextResponse.json(
-        { error: taskError?.message || "Failed to create task" },
-        { status: 500 }
-      );
+      throw new ApiError(500, taskError?.message || "Failed to create task");
     }
 
     const { error: answersError } = await supabase
@@ -69,11 +67,11 @@ export async function POST(request: Request) {
 
     if (answersError) {
       await supabase.from("tasks").delete().eq("id", task.id);
-      return NextResponse.json({ error: answersError.message }, { status: 500 });
+      throw new ApiError(500, answersError.message);
     }
 
-    return NextResponse.json(task, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return Response.json(task, { status: 201 });
+  } catch (error) {
+    return handleRouteError(error);
   }
 }

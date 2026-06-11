@@ -11,13 +11,13 @@ export async function getTeacher() {
     return null;
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("users")
     .select("id, email, role")
     .eq("id", user.id)
     .single();
 
-  if (!profile || profile.role !== "teacher") {
+  if (profileError || !profile || profile.role !== "teacher") {
     return null;
   }
 
@@ -30,4 +30,15 @@ export async function requireTeacher() {
     throw new Error("Unauthorized");
   }
   return teacher;
+}
+
+export async function isTeacherUser(userId: string) {
+  const supabase = await createClient();
+  const { data: profile } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", userId)
+    .single();
+
+  return profile?.role === "teacher";
 }

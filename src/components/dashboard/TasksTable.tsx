@@ -16,6 +16,7 @@ export function TasksTable() {
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -39,7 +40,10 @@ export function TasksTable() {
     const ok = await copyToClipboard(url);
     if (ok) {
       setCopiedSlug(slug);
+      setActionError("");
       setTimeout(() => setCopiedSlug(null), 2000);
+    } else {
+      setActionError(t("copyError"));
     }
   };
 
@@ -47,11 +51,16 @@ export function TasksTable() {
     if (!confirm(t("confirmDelete"))) return;
 
     setDeleteId(id);
+    setActionError("");
     try {
       const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
       if (res.ok) {
         setTasks((prev) => prev.filter((task) => task.id !== id));
+      } else {
+        setActionError(t("deleteError"));
       }
+    } catch {
+      setActionError(t("deleteError"));
     } finally {
       setDeleteId(null);
     }
@@ -77,6 +86,10 @@ export function TasksTable() {
 
   return (
     <>
+      {actionError && (
+        <p className="mb-3 text-sm text-red-600">{actionError}</p>
+      )}
+
       {/* Mobile: cards */}
       <div className="space-y-3 md:hidden">
         {tasks.map((task) => (

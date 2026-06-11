@@ -171,7 +171,7 @@ export function CreateTaskForm() {
             )}
             {htmlContent && (
               <p className="text-sm text-green-600">
-                {htmlContent.length} chars loaded
+                {htmlContent.length} {t("charsLoaded")}
               </p>
             )}
           </div>

@@ -1,7 +1,12 @@
-import { NextResponse } from "next/server";
+import { saveTaskAnswers } from "@/lib/answers";
+import {
+  ApiError,
+  handleRouteError,
+  validateAnswersPayload,
+} from "@/lib/api-utils";
 import { requireTeacher } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { getNextStatus, isValidUuid, mergeAnswers } from "@/lib/utils";
+import { getNextStatus, isValidUuid } from "@/lib/utils";
 import type { SaveAnswersInput } from "@/types";
 
 interface RouteParams {
@@ -10,19 +15,19 @@ interface RouteParams {
 
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
+    const teacher = await requireTeacher();
     const { id } = await params;
 
     if (!isValidUuid(id)) {
-      return NextResponse.json({ error: "Invalid task id" }, { status: 400 });
+      throw new ApiError(400, "Invalid task id");
     }
 
     const body = (await request.json()) as SaveAnswersInput;
 
-    if (!body.answers || typeof body.answers !== "object") {
-      return NextResponse.json({ error: "answers is required" }, { status: 400 });
+    if (!validateAnswersPayload(body.answers)) {
+      throw new ApiError(400, "Invalid answers payload");
     }
 
-    const teacher = await requireTeacher();
     const supabase = await createClient();
 
     const { data: task, error: taskError } = await supabase
@@ -33,45 +38,26 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       .single();
 
     if (taskError || !task) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      throw new ApiError(404, "Task not found");
     }
 
-    const { data: existingRow } = await supabase
-      .from("task_answers")
-      .select("answers")
-      .eq("task_id", id)
-      .single();
-
-    const existingAnswers =
-      (existingRow?.answers as Record<string, unknown>) || {};
-    const mergedAnswers = mergeAnswers(existingAnswers, body.answers);
-
-    const hasAnswers = Object.keys(mergedAnswers).length > 0;
+    const saved = await saveTaskAnswers(supabase, id, body.answers);
+    const hasAnswers = Object.keys(saved.answers).length > 0;
     const newStatus = getNextStatus(task.status, hasAnswers);
 
-    const { error: answersError } = await supabase
-      .from("task_answers")
-      .upsert(
-        {
-          task_id: id,
-          answers: mergedAnswers,
-        },
-        { onConflict: "task_id" }
-      );
-
-    if (answersError) {
-      return NextResponse.json({ error: answersError.message }, { status: 500 });
-    }
-
     if (newStatus !== task.status) {
-      await supabase
+      const { error: statusError } = await supabase
         .from("tasks")
         .update({ status: newStatus })
         .eq("id", id);
+
+      if (statusError) {
+        throw new ApiError(500, "Failed to update task status");
+      }
     }
 
-    return NextResponse.json({ success: true, status: newStatus });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return Response.json({ success: true, status: newStatus });
+  } catch (error) {
+    return handleRouteError(error);
   }
 }

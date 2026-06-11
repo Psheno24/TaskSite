@@ -17,16 +17,26 @@ export function TaskViewer({ taskId }: TaskViewerProps) {
   const { t, locale } = useI18n();
   const [task, setTask] = useState<TaskWithAnswers | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [showAnswers, setShowAnswers] = useState(false);
 
   const fetchTask = useCallback(async () => {
     setLoading(true);
+    setFetchError(false);
     try {
       const res = await fetch(`/api/tasks/${taskId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setTask(data);
+      if (res.status === 404) {
+        setTask(null);
+        return;
       }
+      if (!res.ok) {
+        setFetchError(true);
+        return;
+      }
+      const data = await res.json();
+      setTask(data);
+    } catch {
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -48,7 +58,7 @@ export function TaskViewer({ taskId }: TaskViewerProps) {
 
       const data = await res.json();
       setTask((prev) =>
-        prev ? { ...prev, answers, status: data.status } : prev
+        prev ? { ...prev, status: data.status } : prev
       );
     },
     [taskId]
@@ -56,6 +66,17 @@ export function TaskViewer({ taskId }: TaskViewerProps) {
 
   if (loading) {
     return <p className="text-gray-500 text-sm">...</p>;
+  }
+
+  if (fetchError) {
+    return (
+      <div className="space-y-2">
+        <p className="text-red-600">{t("loadError")}</p>
+        <Button variant="secondary" size="sm" onClick={fetchTask}>
+          {t("retry")}
+        </Button>
+      </div>
+    );
   }
 
   if (!task) {
@@ -91,6 +112,7 @@ export function TaskViewer({ taskId }: TaskViewerProps) {
       </div>
 
       <TaskIframe
+        restoreKey={taskId}
         htmlContent={task.html_content}
         initialAnswers={task.answers}
         onAnswersChange={handleAnswersChange}
