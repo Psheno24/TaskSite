@@ -20,7 +20,7 @@ export function StatusBadge({ status }: { status: TaskStatus }) {
 
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[status]}`}
+      className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[status]}`}
     >
       {t(statusKeys[status])}
     </span>

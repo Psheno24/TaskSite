@@ -189,11 +189,13 @@ export function TasksTable() {
                 <td className="px-4 py-3 font-medium text-gray-900">
                   {task.title}
                 </td>
-                <td className="px-4 py-3 text-gray-600">{task.student_name}</td>
+                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                  {task.student_name}
+                </td>
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                   {formatDate(task.created_at, locale)}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 whitespace-nowrap">
                   <StatusBadge status={task.status} />
                 </td>
                 <td className="px-4 py-3">
