@@ -10,7 +10,7 @@ import { copyToClipboard, formatDate, getTaskUrl } from "@/lib/utils";
 import type { TaskListItem } from "@/types";
 
 export function TasksTable() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [tasks, setTasks] = useState<TaskListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
@@ -108,22 +108,16 @@ export function TasksTable() {
             </div>
 
             <p className="text-xs text-gray-500">
-              {t("createdAt")}: {formatDate(task.created_at, locale)}
+              {t("createdAt")}: {formatDate(task.created_at)}
             </p>
 
-            <div className="flex items-center gap-2 rounded-md bg-gray-50 p-2">
-              <code className="min-w-0 flex-1 truncate text-xs text-gray-500">
-                /task/{task.slug}
-              </code>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="shrink-0"
-                onClick={() => handleCopy(task.slug)}
-              >
-                {copiedSlug === task.slug ? t("copied") : t("copyLink")}
-              </Button>
-            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleCopy(task.slug)}
+            >
+              {copiedSlug === task.slug ? t("copied") : t("copyLink")}
+            </Button>
 
             <div className="grid grid-cols-3 gap-2">
               <a
@@ -159,8 +153,8 @@ export function TasksTable() {
       </div>
 
       {/* Desktop: table */}
-      <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
+      <div className="hidden md:block rounded-lg border border-gray-200">
+        <table className="w-full table-auto divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-4 py-3 text-left font-medium text-gray-600">
@@ -193,22 +187,19 @@ export function TasksTable() {
                   {task.student_name}
                 </td>
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                  {formatDate(task.created_at, locale)}
+                  {formatDate(task.created_at)}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <StatusBadge status={task.status} />
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs text-gray-500">/task/{task.slug}</code>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleCopy(task.slug)}
-                    >
-                      {copiedSlug === task.slug ? t("copied") : t("copyLink")}
-                    </Button>
-                  </div>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleCopy(task.slug)}
+                  >
+                    {copiedSlug === task.slug ? t("copied") : t("copyLink")}
+                  </Button>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">

@@ -14,7 +14,7 @@ interface TaskViewerProps {
 }
 
 export function TaskViewer({ taskId }: TaskViewerProps) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [task, setTask] = useState<TaskWithAnswers | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
@@ -103,10 +103,10 @@ export function TaskViewer({ taskId }: TaskViewerProps) {
             {t("student")}: <strong>{task.student_name}</strong>
           </span>
           <span>
-            {t("createdAt")}: {formatDate(task.created_at, locale)}
+            {t("createdAt")}: {formatDate(task.created_at)}
           </span>
           <span>
-            {t("updatedAt")}: {formatDate(task.updated_at, locale)}
+            {t("updatedAt")}: {formatDate(task.updated_at)}
           </span>
         </div>
       </div>
