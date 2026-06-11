@@ -9,6 +9,7 @@ export const BRIDGE_SCRIPT = `
   var debounceTimer = null;
   var pollTimer = null;
   var isReadOnly = false;
+  var isRestoring = false;
   var lastSnapshot = "";
   var bridgeIdCounter = 0;
   var pendingAnswers = null;
@@ -25,6 +26,122 @@ export const BRIDGE_SCRIPT = `
     var id = "bridge_" + bridgeIdCounter;
     if (el.dataset) el.dataset.bridgeId = id;
     return id;
+  }
+
+  function parseCheckHandler(el) {
+    var onclick = el.getAttribute("onclick") || "";
+    var match = onclick.match(
+      /check\\s*\\(\\s*this\\s*,\\s*['"]([^'"]+)['"]\\s*,\\s*['"]([^'"]*)['"]\\s*\\)/i
+    );
+    if (match) {
+      return { questionId: match[1], value: match[2] };
+    }
+    return null;
+  }
+
+  function getQuizButtonQuestionId(btn) {
+    var parsed = parseCheckHandler(btn);
+    if (parsed) return parsed.questionId;
+
+    var parent = btn.closest(".opts, .options, .choices, [data-question]") || btn.parentElement;
+    if (parent) return "opts:" + ensureBridgeId(parent);
+    return "btn:" + ensureBridgeId(btn);
+  }
+
+  function getQuizButtonValue(btn) {
+    var parsed = parseCheckHandler(btn);
+    if (parsed) return parsed.value;
+    return (btn.textContent || "").trim();
+  }
+
+  function isQuizOptionButton(el) {
+    if (!el || el.tagName !== "BUTTON") return false;
+    if (el.classList && (el.classList.contains("opt") || el.classList.contains("option"))) {
+      return true;
+    }
+    var onclick = el.getAttribute("onclick") || "";
+    return onclick.indexOf("check(") !== -1;
+  }
+
+  function getQuizButtonGroups() {
+    var groups = {};
+    var buttons = document.querySelectorAll("button");
+    buttons.forEach(function (btn) {
+      if (!isQuizOptionButton(btn)) return;
+      var qId = getQuizButtonQuestionId(btn);
+      if (!groups[qId]) groups[qId] = [];
+      groups[qId].push(btn);
+    });
+    return groups;
+  }
+
+  function getSelectedQuizButton(group) {
+    var i;
+    for (i = 0; i < group.length; i++) {
+      if (group[i].classList.contains("wrong")) return group[i];
+    }
+    for (i = 0; i < group.length; i++) {
+      if (group[i].classList.contains("correct")) return group[i];
+    }
+    for (i = 0; i < group.length; i++) {
+      if (
+        group[i].classList.contains("selected") ||
+        group[i].classList.contains("active") ||
+        group[i].classList.contains("chosen") ||
+        group[i].classList.contains("picked")
+      ) {
+        return group[i];
+      }
+    }
+    return null;
+  }
+
+  function collectQuizButtonAnswers(answers) {
+    var groups = getQuizButtonGroups();
+    Object.keys(groups).forEach(function (qId) {
+      var selected = getSelectedQuizButton(groups[qId]);
+      if (selected) {
+        answers[qId] = getQuizButtonValue(selected);
+      }
+    });
+  }
+
+  function applyQuizButtonAnswers(answers, onlyEmpty) {
+    var groups = getQuizButtonGroups();
+
+    Object.keys(answers).forEach(function (qId) {
+      if (!(qId in answers)) return;
+      var value = String(answers[qId]);
+      var group = groups[qId];
+      if (!group || !group.length) return;
+
+      var already = getSelectedQuizButton(group);
+      if (already && getQuizButtonValue(already) === value) return;
+      if (onlyEmpty && already) return;
+
+      for (var i = 0; i < group.length; i++) {
+        var btn = group[i];
+        if (getQuizButtonValue(btn) !== value) continue;
+
+        isRestoring = true;
+        try {
+          if (typeof window.check === "function") {
+            var parsed = parseCheckHandler(btn);
+            if (parsed) {
+              window.check(btn, parsed.questionId, parsed.value);
+            } else {
+              btn.click();
+            }
+          } else {
+            btn.click();
+          }
+        } catch (e) {
+          try { btn.click(); } catch (e2) {}
+        }
+        isRestoring = false;
+        break;
+      }
+    });
   }
 
   function getRadioGroupKey(el) {
@@ -81,13 +198,11 @@ export const BRIDGE_SCRIPT = `
 
   function getRadioGroups() {
     var groups = {};
-    var seen = new Set();
     var radios = document.querySelectorAll('input[type="radio"]');
     radios.forEach(function (el) {
       var key = getRadioGroupKey(el);
       if (!groups[key]) groups[key] = [];
       groups[key].push(el);
-      seen.add(el);
     });
     return groups;
   }
@@ -125,11 +240,9 @@ export const BRIDGE_SCRIPT = `
     var fields = getAllFields();
     var checkboxGroups = {};
     var radioGroups = getRadioGroups();
-    var handledRadios = new Set();
 
     Object.keys(radioGroups).forEach(function (key) {
       var group = radioGroups[key];
-      group.forEach(function (el) { handledRadios.add(el); });
       for (var i = 0; i < group.length; i++) {
         var stored = getRadioStoredValue(group[i], group);
         if (stored !== null) {
@@ -138,6 +251,8 @@ export const BRIDGE_SCRIPT = `
         }
       }
     });
+
+    collectQuizButtonAnswers(answers);
 
     fields.forEach(function (el, index) {
       var tag = el.tagName.toLowerCase();
@@ -185,6 +300,7 @@ export const BRIDGE_SCRIPT = `
   function applyAnswers(answers, onlyEmpty) {
     if (!answers || typeof answers !== "object") return;
     pendingAnswers = answers;
+    isRestoring = true;
 
     var radioGroups = getRadioGroups();
     Object.keys(radioGroups).forEach(function (key) {
@@ -196,6 +312,8 @@ export const BRIDGE_SCRIPT = `
         el.checked = matchRadioValue(el, group, value);
       });
     });
+
+    applyQuizButtonAnswers(answers, onlyEmpty);
 
     var fields = getAllFields();
 
@@ -249,6 +367,8 @@ export const BRIDGE_SCRIPT = `
       if (String(getFieldValue(el)) === String(value)) return;
       setFieldValue(el, value);
     });
+
+    isRestoring = false;
   }
 
   function setReadOnly(readonly) {
@@ -269,10 +389,16 @@ export const BRIDGE_SCRIPT = `
         el.disabled = isReadOnly;
       }
     });
+
+    if (isReadOnly) {
+      document.querySelectorAll("button").forEach(function (btn) {
+        if (isQuizOptionButton(btn)) btn.disabled = true;
+      });
+    }
   }
 
   function sendAnswers() {
-    if (isReadOnly) return;
+    if (isReadOnly || isRestoring) return;
     var answers = collectAnswers();
     var snapshot = JSON.stringify(answers);
     if (snapshot === lastSnapshot) return;
@@ -284,7 +410,7 @@ export const BRIDGE_SCRIPT = `
   }
 
   function notifyChange() {
-    if (isReadOnly) return;
+    if (isReadOnly || isRestoring) return;
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(sendAnswers, DEBOUNCE_MS);
   }
@@ -316,19 +442,24 @@ export const BRIDGE_SCRIPT = `
   if (typeof MutationObserver !== "undefined") {
     var observer = new MutationObserver(function (mutations) {
       var hasNewNodes = false;
-      var hasClassChange = false;
+      var hasAttrChange = false;
       for (var i = 0; i < mutations.length; i++) {
         if (mutations[i].type === "childList" && mutations[i].addedNodes.length > 0) {
           hasNewNodes = true;
         }
-        if (mutations[i].type === "attributes" && mutations[i].attributeName === "class") {
-          hasClassChange = true;
+        if (
+          mutations[i].type === "attributes" &&
+          (mutations[i].attributeName === "class" ||
+            mutations[i].attributeName === "disabled" ||
+            mutations[i].attributeName === "aria-checked")
+        ) {
+          hasAttrChange = true;
         }
       }
       if (hasNewNodes && pendingAnswers) {
         applyAnswers(pendingAnswers, true);
       }
-      if (hasClassChange) {
+      if (hasAttrChange) {
         notifyChange();
       }
     });
@@ -336,7 +467,7 @@ export const BRIDGE_SCRIPT = `
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["class", "checked", "aria-checked"]
+      attributeFilter: ["class", "disabled", "checked", "aria-checked"]
     });
   }
 
