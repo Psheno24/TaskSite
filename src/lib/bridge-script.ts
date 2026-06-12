@@ -423,15 +423,18 @@ export const BRIDGE_SCRIPT = `
     if (restoreTimer) clearTimeout(restoreTimer);
     restoreTimer = setTimeout(function () {
       allowSave = true;
-      lastSnapshot = JSON.stringify(buildMergedAnswers());
+      // Baseline = last restored state, not current DOM — otherwise answers
+      // picked during the blackout are marked "already saved" and never sent.
+      lastSnapshot = JSON.stringify(pendingAnswers || {});
+      sendAnswers();
     }, 2500);
   }
 
-  function sendAnswers() {
+  function sendAnswers(force) {
     if (isReadOnly || isRestoring || !allowSave) return;
     var answers = buildMergedAnswers();
     var snapshot = JSON.stringify(answers);
-    if (snapshot === lastSnapshot) return;
+    if (!force && snapshot === lastSnapshot) return;
     lastSnapshot = snapshot;
     pendingAnswers = answers;
     window.parent.postMessage({
@@ -463,14 +466,18 @@ export const BRIDGE_SCRIPT = `
     if (data.type === "REQUEST_ANSWERS") {
       var prevAllow = allowSave;
       allowSave = true;
-      sendAnswers();
+      sendAnswers(true);
       allowSave = prevAllow;
     }
   }
 
   document.addEventListener("input", notifyChange, true);
   document.addEventListener("change", notifyChange, true);
-  document.addEventListener("click", notifyChange, true);
+  document.addEventListener("click", function (e) {
+    if (isReadOnly || isRestoring) return;
+    // Run after onclick handlers (e.g. check()) update button classes.
+    setTimeout(notifyChange, 0);
+  }, true);
   document.addEventListener("paste", notifyChange, true);
   window.addEventListener("message", onParentMessage);
 
