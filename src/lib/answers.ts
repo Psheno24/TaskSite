@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { mergeAnswers } from "@/lib/utils";
 
 interface SaveAnswersResult {
   answers: Record<string, unknown>;
@@ -14,26 +13,12 @@ export async function saveTaskAnswers(
   const maxRetries = 3;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const { data: existingRow, error: fetchError } = await supabase
-      .from("task_answers")
-      .select("answers, updated_at")
-      .eq("task_id", taskId)
-      .single();
-
-    if (fetchError && fetchError.code !== "PGRST116") {
-      throw new Error(fetchError.message);
-    }
-
-    const existingAnswers =
-      (existingRow?.answers as Record<string, unknown>) || {};
-    const mergedAnswers = mergeAnswers(existingAnswers, incoming);
-
     const { data, error: upsertError } = await supabase
       .from("task_answers")
       .upsert(
         {
           task_id: taskId,
-          answers: mergedAnswers,
+          answers: incoming,
         },
         { onConflict: "task_id" }
       )

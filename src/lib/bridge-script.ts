@@ -1,3 +1,5 @@
+import { prepareTaskHtml } from "@/lib/prepare-task-html";
+
 /**
  * Injected into task HTML inside the iframe.
  * Communicates with the parent page via postMessage for autosave.
@@ -398,25 +400,75 @@ export const BRIDGE_SCRIPT = `
   }
 
   function buildMergedAnswers() {
-    var collected = collectAnswers();
-    var answers = {};
-    var key;
+    return collectAnswers();
+  }
 
-    if (pendingAnswers && typeof pendingAnswers === "object") {
-      for (key in pendingAnswers) {
-        if (Object.prototype.hasOwnProperty.call(pendingAnswers, key)) {
-          answers[key] = pendingAnswers[key];
+  function reapplySavedAnswers() {
+    if (!pendingAnswers || isRestoring) return;
+    isRestoring = true;
+    applyAnswers(pendingAnswers, false);
+    isRestoring = false;
+  }
+
+  function setupInPageNavigation() {
+    document.addEventListener("click", function (e) {
+      var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+      if (!a) return;
+
+      var href = (a.getAttribute("href") || "").trim();
+      if (!href || href === "#") return;
+
+      if (href.charAt(0) === "#") {
+        e.preventDefault();
+        var id = href.slice(1);
+        var target = document.getElementById(id);
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
         }
+        if (window.history && window.history.pushState) {
+          window.history.pushState({ bridge: true }, "", "#" + id);
+        }
+        document.querySelectorAll(".nav-btn").forEach(function (btn) {
+          btn.classList.remove("active");
+        });
+        if (a.classList.contains("nav-btn")) {
+          a.classList.add("active");
+        }
+        return;
       }
-    }
 
-    for (key in collected) {
-      if (Object.prototype.hasOwnProperty.call(collected, key)) {
-        answers[key] = collected[key];
+      if (
+        href.indexOf("http:") === 0 ||
+        href.indexOf("https:") === 0 ||
+        href.indexOf("//") === 0 ||
+        (href.charAt(0) === "/" && href.charAt(1) !== "/")
+      ) {
+        e.preventDefault();
       }
-    }
+    }, true);
 
-    return answers;
+    window.addEventListener("popstate", function () {
+      setTimeout(reapplySavedAnswers, 0);
+    });
+
+    window.addEventListener("hashchange", function () {
+      setTimeout(reapplySavedAnswers, 0);
+    });
+  }
+
+  function wrapResetAll() {
+    if (!window.resetAll || window.resetAll.__bridgeWrapped) return;
+    var original = window.resetAll;
+    window.resetAll = function () {
+      var result = original.apply(this, arguments);
+      pendingAnswers = collectAnswers();
+      lastSnapshot = "";
+      setTimeout(function () {
+        sendAnswers(true);
+      }, 50);
+      return result;
+    };
+    window.resetAll.__bridgeWrapped = true;
   }
 
   function scheduleAllowSave() {
@@ -514,6 +566,10 @@ export const BRIDGE_SCRIPT = `
   }
 
   function init() {
+    setupInPageNavigation();
+    wrapResetAll();
+    setTimeout(wrapResetAll, 500);
+    setTimeout(wrapResetAll, 2000);
     window.parent.postMessage({ type: "TASK_READY" }, "*");
     pollTimer = setInterval(sendAnswers, POLL_MS);
     scheduleAllowSave();
@@ -528,15 +584,16 @@ export const BRIDGE_SCRIPT = `
 `;
 
 export function injectBridgeIntoHtml(html: string): string {
+  const { html: prepared } = prepareTaskHtml(html);
   const scriptTag = `<script>${BRIDGE_SCRIPT}<\/script>`;
 
-  if (html.includes("</body>")) {
-    return html.replace("</body>", `${scriptTag}</body>`);
+  if (prepared.includes("</body>")) {
+    return prepared.replace("</body>", `${scriptTag}</body>`);
   }
 
-  if (html.includes("</html>")) {
-    return html.replace("</html>", `${scriptTag}</html>`);
+  if (prepared.includes("</html>")) {
+    return prepared.replace("</html>", `${scriptTag}</html>`);
   }
 
-  return html + scriptTag;
+  return prepared + scriptTag;
 }

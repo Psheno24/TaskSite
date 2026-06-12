@@ -1,5 +1,6 @@
 import { ApiError, handleRouteError, MAX_HTML_SIZE } from "@/lib/api-utils";
 import { requireTeacher } from "@/lib/auth";
+import { prepareTaskHtml } from "@/lib/prepare-task-html";
 import { createClient } from "@/lib/supabase/server";
 import { createTaskSlug } from "@/lib/utils";
 import type { CreateTaskInput } from "@/types";
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
       throw new ApiError(400, "HTML content exceeds maximum size");
     }
 
+    const { html: preparedHtml, warnings } = prepareTaskHtml(body.html_content);
     const supabase = await createClient();
     const slug = createTaskSlug();
 
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
         slug,
         title: body.title.trim(),
         student_name: body.student_name.trim(),
-        html_content: body.html_content,
+        html_content: preparedHtml,
         teacher_id: teacher.id,
         status: "not_started",
       })
@@ -70,7 +72,7 @@ export async function POST(request: Request) {
       throw new ApiError(500, answersError.message);
     }
 
-    return Response.json(task, { status: 201 });
+    return Response.json({ ...task, html_warnings: warnings }, { status: 201 });
   } catch (error) {
     return handleRouteError(error);
   }

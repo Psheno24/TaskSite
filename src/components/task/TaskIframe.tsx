@@ -157,7 +157,13 @@ export const TaskIframe = forwardRef<TaskIframeHandle, TaskIframeProps>(
         if (!data || typeof data !== "object") return;
 
         if (data.type === "TASK_READY") {
+          restoredForKeyRef.current = null;
           setIsReady(true);
+          sendToIframe({
+            type: "RESTORE_ANSWERS",
+            answers: answersRef.current,
+          });
+          sendToIframe({ type: "SET_READONLY", readonly: readOnly });
           return;
         }
 

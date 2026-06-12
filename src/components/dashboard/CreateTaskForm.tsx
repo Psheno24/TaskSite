@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { useI18n } from "@/lib/i18n/context";
+import { prepareTaskHtml } from "@/lib/prepare-task-html";
 import { copyToClipboard, getTaskUrl } from "@/lib/utils";
 import type { Task } from "@/types";
 
@@ -22,6 +23,7 @@ export function CreateTaskForm() {
   const [loading, setLoading] = useState(false);
   const [createdTask, setCreatedTask] = useState<Task | null>(null);
   const [copied, setCopied] = useState(false);
+  const [htmlWarnings, setHtmlWarnings] = useState<string[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -58,14 +60,20 @@ export function CreateTaskForm() {
     if (!validate()) return;
 
     setLoading(true);
+    setHtmlWarnings([]);
     try {
+      const { html: preparedHtml, warnings } = prepareTaskHtml(htmlContent);
+      if (warnings.length > 0) {
+        setHtmlWarnings(warnings);
+      }
+
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title.trim(),
           student_name: studentName.trim(),
-          html_content: htmlContent,
+          html_content: preparedHtml,
         }),
       });
 
@@ -177,6 +185,17 @@ export function CreateTaskForm() {
           </div>
         )}
       </div>
+
+      {htmlWarnings.length > 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 space-y-1">
+          <p className="font-medium">{t("htmlWarningsTitle")}</p>
+          <ul className="list-disc pl-5 space-y-1">
+            {htmlWarnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {errors.form && <p className="text-sm text-red-600">{errors.form}</p>}
 
