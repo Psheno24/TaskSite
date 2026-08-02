@@ -4,4 +4,5 @@
 
 body {
   @apply bg-gray-50 text-gray-900 antialiased;
+  background-image: radial-gradient(circle at top, rgb(255 255 255) 0%, rgb(248 250 252) 45%, rgb(249 250 251) 100%);
 }

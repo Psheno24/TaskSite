@@ -36,10 +36,13 @@ export async function GET(_request: Request, { params }: RouteParams) {
       ? task.task_answers[0]
       : task.task_answers;
 
-    const { task_answers, ...publicTask } = task;
-
     return Response.json({
-      ...publicTask,
+      slug: task.slug,
+      title: task.title,
+      student_name: task.student_name,
+      html_content: task.html_content,
+      status: task.status,
+      updated_at: task.updated_at,
       answers: (answersRow?.answers as TaskAnswers) || {},
       answers_updated_at: answersRow?.updated_at || null,
     });

@@ -66,19 +66,36 @@ export function TasksTable() {
     }
   };
 
+  const statusCounts = tasks.reduce(
+    (acc, task) => {
+      acc.total += 1;
+      acc[task.status] += 1;
+      return acc;
+    },
+    { total: 0, not_started: 0, in_progress: 0, completed: 0 }
+  );
+
   if (loading) {
-    return <p className="text-gray-500 text-sm">...</p>;
+    return (
+      <div className="space-y-3">
+        <div className="h-10 w-64 animate-pulse rounded-xl bg-gray-200/80" />
+        <div className="h-72 animate-pulse rounded-2xl border border-gray-200 bg-white/70" />
+      </div>
+    );
   }
 
   if (tasks.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-gray-300 p-8 sm:p-12 text-center">
-        <p className="text-gray-600">{t("noTasks")}</p>
+      <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center shadow-sm sm:p-14">
+        <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-xl">
+          ✨
+        </div>
+        <p className="text-base font-medium text-gray-700">{t("noTasks")}</p>
         <Link
           href="/dashboard/create"
-          className="mt-2 inline-block text-sm text-gray-900 underline"
+          className="mt-4 inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800"
         >
-          {t("createFirst")}
+          + {t("createFirst")}
         </Link>
       </div>
     );
@@ -87,17 +104,38 @@ export function TasksTable() {
   return (
     <>
       {actionError && (
-        <p className="mb-3 text-sm text-red-600">{actionError}</p>
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {actionError}
+        </div>
       )}
+
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("dashboard")}</p>
+          <p className="mt-1 text-2xl font-semibold text-gray-900">{statusCounts.total}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("statusNotStarted")}</p>
+          <p className="mt-1 text-2xl font-semibold text-slate-700">{statusCounts.not_started}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("statusInProgress")}</p>
+          <p className="mt-1 text-2xl font-semibold text-sky-700">{statusCounts.in_progress}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("statusCompleted")}</p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-700">{statusCounts.completed}</p>
+        </div>
+      </div>
 
       {/* Mobile: cards */}
       <div className="space-y-3 md:hidden">
         {tasks.map((task) => (
           <div
             key={task.id}
-            className="rounded-lg border border-gray-200 bg-white p-4 space-y-3"
+            className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md"
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3">
               <div className="min-w-0">
                 <h3 className="font-medium text-gray-900 break-words">
                   {task.title}
@@ -111,13 +149,16 @@ export function TasksTable() {
               {t("createdAt")}: {formatDate(task.created_at)}
             </p>
 
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => handleCopy(task.slug)}
-            >
-              {copiedSlug === task.slug ? t("copied") : t("copyLink")}
-            </Button>
+            <div className="rounded-xl bg-gray-50 p-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full"
+                onClick={() => handleCopy(task.slug)}
+              >
+                {copiedSlug === task.slug ? t("copied") : t("copyLink")}
+              </Button>
+            </div>
 
             <div className="grid grid-cols-3 gap-2">
               <a
@@ -153,33 +194,33 @@ export function TasksTable() {
       </div>
 
       {/* Desktop: table */}
-      <div className="hidden md:block rounded-lg border border-gray-200">
+      <div className="hidden overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm md:block">
         <table className="w-full table-auto divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50/80">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 {t("title")}
               </th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 {t("student")}
               </th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 {t("createdAt")}
               </th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 {t("status")}
               </th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 {t("link")}
               </th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 {t("actions")}
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 bg-white">
             {tasks.map((task) => (
-              <tr key={task.id} className="hover:bg-gray-50">
+              <tr key={task.id} className="transition hover:bg-gray-50/70">
                 <td className="px-4 py-3 font-medium text-gray-900">
                   {task.title}
                 </td>
