@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tasksite
+      POSTGRES_PASSWORD: tasksite
+      POSTGRES_DB: tasksite
+    ports:
+      - "5432:5432"
+    volumes:
+      - tasksite_pgdata:/var/lib/postgresql/data
+      - ./postgres/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tasksite -d tasksite"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  tasksite_pgdata:

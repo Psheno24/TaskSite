@@ -13,21 +13,24 @@
 - **Vercel** (деплой фронта)
 
 > Бесплатный проект на supabase.com уходит на паузу после ~недели без активности.
-> Чтобы этого избежать: **Supabase Pro**, либо перенос стека на свой VPS (код приложения менять не нужно).
+> В коде есть переключатель `DATA_PROVIDER=supabase|postgres`: текущий Supabase не трогаем,
+> параллельно готовим голый Postgres на VPS (мало RAM), потом переключаемся.
 > Подробно: [`deploy/vps/README.md`](deploy/vps/README.md).
 
 ## Быстрый старт
 
-### 1. Supabase
+### 1. База данных
 
-1. Создайте проект на [supabase.com](https://supabase.com) **или** поднимите self-hosted стек на VPS ([инструкция](deploy/vps/README.md)).
-2. Откройте **SQL Editor** и выполните весь скрипт из файла `supabase/schema.sql`.
-3. Создайте преподавателя: **Authentication → Users → Add user** (email + password).
-   Триггер автоматически создаст запись в `public.users`.
-4. Скопируйте из **Project Settings → API** (или из `.env` self-hosted):
-   - Project URL
-   - `anon` public key
-   - `service_role` secret key
+**По умолчанию — Supabase** (как сейчас):
+
+1. Создайте проект на [supabase.com](https://supabase.com) **или** self-hosted на VPS.
+2. Откройте **SQL Editor** и выполните `supabase/schema.sql`.
+3. Создайте преподавателя: **Authentication → Users → Add user**.
+4. Скопируйте Project URL, `anon` и `service_role` ключи.
+
+**Альтернатива — голый Postgres** (для VPS, без паузы и без тяжёлого Docker Supabase):
+
+См. [`deploy/vps/README.md`](deploy/vps/README.md). Кратко: `DATA_PROVIDER=postgres`, `DATABASE_URL`, `AUTH_SECRET`, схема `postgres/schema.sql`.
 
 ### 2. Локальный запуск
 

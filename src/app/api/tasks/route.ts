@@ -1,25 +1,14 @@
 import { ApiError, handleRouteError, MAX_HTML_SIZE } from "@/lib/api-utils";
 import { requireTeacher } from "@/lib/auth";
+import { getTaskStore } from "@/lib/data/tasks";
 import { prepareTaskHtml } from "@/lib/prepare-task-html";
-import { createClient } from "@/lib/supabase/server";
 import { createTaskSlug } from "@/lib/utils";
 import type { CreateTaskInput } from "@/types";
 
 export async function GET() {
   try {
     const teacher = await requireTeacher();
-    const supabase = await createClient();
-
-    const { data: tasks, error } = await supabase
-      .from("tasks")
-      .select("id, slug, title, student_name, status, created_at, updated_at")
-      .eq("teacher_id", teacher.id)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      throw new ApiError(500, error.message);
-    }
-
+    const tasks = await getTaskStore().listForTeacher(teacher.id);
     return Response.json(tasks);
   } catch (error) {
     return handleRouteError(error);
@@ -40,37 +29,15 @@ export async function POST(request: Request) {
     }
 
     const { html: preparedHtml, warnings } = prepareTaskHtml(body.html_content);
-    const supabase = await createClient();
     const slug = createTaskSlug();
 
-    const { data: task, error: taskError } = await supabase
-      .from("tasks")
-      .insert({
-        slug,
-        title: body.title.trim(),
-        student_name: body.student_name.trim(),
-        html_content: preparedHtml,
-        teacher_id: teacher.id,
-        status: "not_started",
-      })
-      .select()
-      .single();
-
-    if (taskError || !task) {
-      throw new ApiError(500, taskError?.message || "Failed to create task");
-    }
-
-    const { error: answersError } = await supabase
-      .from("task_answers")
-      .insert({
-        task_id: task.id,
-        answers: {},
-      });
-
-    if (answersError) {
-      await supabase.from("tasks").delete().eq("id", task.id);
-      throw new ApiError(500, answersError.message);
-    }
+    const task = await getTaskStore().create({
+      slug,
+      title: body.title.trim(),
+      student_name: body.student_name.trim(),
+      html_content: preparedHtml,
+      teacher_id: teacher.id,
+    });
 
     return Response.json({ ...task, html_warnings: warnings }, { status: 201 });
   } catch (error) {

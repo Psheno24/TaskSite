@@ -1,30 +1,18 @@
-import { createClient } from "@/lib/supabase/server";
+import { getDataProvider } from "@/lib/provider";
+import { postgresAuthStore, supabaseAuthStore } from "@/lib/data/auth";
+import type { TeacherProfile } from "@/lib/data/types";
 
-export async function getTeacher() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    return null;
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("users")
-    .select("id, email, role")
-    .eq("id", user.id)
-    .single();
-
-  if (profileError || !profile || profile.role !== "teacher") {
-    return null;
-  }
-
-  return { ...profile, authUser: user };
+function getAuthStore() {
+  return getDataProvider() === "postgres"
+    ? postgresAuthStore
+    : supabaseAuthStore;
 }
 
-export async function requireTeacher() {
+export async function getTeacher(): Promise<TeacherProfile | null> {
+  return getAuthStore().getTeacher();
+}
+
+export async function requireTeacher(): Promise<TeacherProfile> {
   const teacher = await getTeacher();
   if (!teacher) {
     throw new Error("Unauthorized");
@@ -32,13 +20,13 @@ export async function requireTeacher() {
   return teacher;
 }
 
-export async function isTeacherUser(userId: string) {
-  const supabase = await createClient();
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", userId)
-    .single();
+export async function loginTeacher(
+  email: string,
+  password: string
+): Promise<TeacherProfile | null> {
+  return getAuthStore().login(email, password);
+}
 
-  return profile?.role === "teacher";
+export async function logoutTeacher(): Promise<void> {
+  return getAuthStore().logout();
 }

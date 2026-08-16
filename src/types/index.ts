@@ -1,5 +1,6 @@
 import type { TaskStatus } from "./database";
 
+export type { TaskStatus };
 export type TaskAnswers = Record<string, string | boolean | string[]>;
 
 export interface Task {

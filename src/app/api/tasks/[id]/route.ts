@@ -1,6 +1,6 @@
 import { ApiError, handleRouteError } from "@/lib/api-utils";
 import { requireTeacher } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { getTaskStore } from "@/lib/data/tasks";
 import { isValidUuid } from "@/lib/utils";
 import type { TaskAnswers } from "@/types";
 
@@ -17,24 +17,14 @@ export async function GET(_request: Request, { params }: RouteParams) {
     }
 
     const teacher = await requireTeacher();
-    const supabase = await createClient();
+    const store = getTaskStore();
+    const task = await store.getForTeacher(id, teacher.id);
 
-    const { data: task, error: taskError } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("id", id)
-      .eq("teacher_id", teacher.id)
-      .single();
-
-    if (taskError || !task) {
+    if (!task) {
       throw new ApiError(404, "Task not found");
     }
 
-    const { data: answersRow } = await supabase
-      .from("task_answers")
-      .select("answers, updated_at")
-      .eq("task_id", id)
-      .single();
+    const answersRow = await store.getAnswers(id, "user");
 
     return Response.json({
       ...task,
@@ -55,20 +45,9 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     }
 
     const teacher = await requireTeacher();
-    const supabase = await createClient();
+    const deleted = await getTaskStore().deleteForTeacher(id, teacher.id);
 
-    const { data, error } = await supabase
-      .from("tasks")
-      .delete()
-      .eq("id", id)
-      .eq("teacher_id", teacher.id)
-      .select("id");
-
-    if (error) {
-      throw new ApiError(500, error.message);
-    }
-
-    if (!data || data.length === 0) {
+    if (!deleted) {
       throw new ApiError(404, "Task not found");
     }
 

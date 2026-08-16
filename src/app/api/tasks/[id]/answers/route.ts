@@ -5,7 +5,7 @@ import {
   validateAnswersPayload,
 } from "@/lib/api-utils";
 import { requireTeacher } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { getTaskStore } from "@/lib/data/tasks";
 import { getNextStatus, isValidUuid } from "@/lib/utils";
 import type { SaveAnswersInput } from "@/types";
 
@@ -28,32 +28,19 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       throw new ApiError(400, "Invalid answers payload");
     }
 
-    const supabase = await createClient();
+    const store = getTaskStore();
+    const task = await store.getForTeacher(id, teacher.id);
 
-    const { data: task, error: taskError } = await supabase
-      .from("tasks")
-      .select("id, status")
-      .eq("id", id)
-      .eq("teacher_id", teacher.id)
-      .single();
-
-    if (taskError || !task) {
+    if (!task) {
       throw new ApiError(404, "Task not found");
     }
 
-    const saved = await saveTaskAnswers(supabase, id, body.answers);
+    const saved = await saveTaskAnswers(id, body.answers, "user");
     const hasAnswers = Object.keys(saved.answers).length > 0;
     const newStatus = getNextStatus(task.status, hasAnswers);
 
     if (newStatus !== task.status) {
-      const { error: statusError } = await supabase
-        .from("tasks")
-        .update({ status: newStatus })
-        .eq("id", id);
-
-      if (statusError) {
-        throw new ApiError(500, "Failed to update task status");
-      }
+      await store.updateStatus(id, newStatus, "user");
     }
 
     return Response.json({ success: true, status: newStatus });

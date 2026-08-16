@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { StudentTaskPage } from "@/components/task/StudentTaskPage";
-import { createServiceClient } from "@/lib/supabase/server";
+import { getTaskStore } from "@/lib/data/tasks";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -8,16 +8,10 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const supabase = createServiceClient();
-
-  const { data: task } = await supabase
-    .from("tasks")
-    .select("title")
-    .eq("slug", slug)
-    .single();
+  const title = await getTaskStore().getTitleBySlug(slug);
 
   return {
-    title: task?.title || "TaskSite",
+    title: title || "TaskSite",
   };
 }
 
