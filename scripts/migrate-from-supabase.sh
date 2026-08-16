@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 # Copy tasks + answers from Supabase → local Postgres (VPS).
-# Uses psql \COPY (no pg_dump version matching).
-#
-# Usage:
-#   TEACHER_EMAIL='...' \
-#   TARGET_DATABASE_URL='postgresql://tasksite:...@127.0.0.1:5432/tasksite' \
-#   SOURCE_DATABASE_URL='postgresql://postgres:...@db.xxx.supabase.co:5432/postgres?sslmode=require' \
-#   bash scripts/migrate-from-supabase.sh
+# Uses psql \COPY (no pg_dump, no superuser needed).
 set -euo pipefail
 
 : "${SOURCE_DATABASE_URL:?Set SOURCE_DATABASE_URL (Supabase DB URI)}"
@@ -15,6 +9,7 @@ set -euo pipefail
 
 need() { command -v "$1" >/dev/null || { echo "Missing: $1" >&2; exit 1; }; }
 need psql
+need python3
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -37,24 +32,38 @@ psql "$SOURCE_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
 psql "$SOURCE_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
   "\\copy public.task_answers TO '${TMP}/answers.csv' WITH (FORMAT csv, HEADER true)"
 
-echo "   tasks file: $(wc -l < "${TMP}/tasks.csv") lines"
-echo "   answers file: $(wc -l < "${TMP}/answers.csv") lines"
+echo "3) Remapping teacher_id in CSV..."
+python3 - <<PY
+import csv
+from pathlib import Path
+src = Path("${TMP}/tasks.csv")
+dst = Path("${TMP}/tasks_mapped.csv")
+new_id = "${NEW_TEACHER_ID}"
+with src.open(newline="", encoding="utf-8") as f_in, dst.open(
+    "w", newline="", encoding="utf-8"
+) as f_out:
+    reader = csv.DictReader(f_in)
+    if not reader.fieldnames or "teacher_id" not in reader.fieldnames:
+        raise SystemExit(f"Unexpected tasks CSV columns: {reader.fieldnames}")
+    writer = csv.DictWriter(f_out, fieldnames=reader.fieldnames)
+    writer.writeheader()
+    n = 0
+    for row in reader:
+        row["teacher_id"] = new_id
+        writer.writerow(row)
+        n += 1
+print(f"   remapped {n} tasks")
+PY
 
-echo "3) Clearing old rows on VPS (keeps teacher)..."
+echo "4) Clearing old rows on VPS (keeps teacher)..."
 psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
   "TRUNCATE public.task_answers, public.tasks CASCADE;"
 
-echo "4) Importing CSV (FK checks off)..."
-psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 <<SQL
-SET session_replication_role = replica;
-\\copy public.tasks FROM '${TMP}/tasks.csv' WITH (FORMAT csv, HEADER true)
-\\copy public.task_answers FROM '${TMP}/answers.csv' WITH (FORMAT csv, HEADER true)
-SET session_replication_role = origin;
-SQL
-
-echo "5) Pointing all tasks at your VPS teacher..."
+echo "5) Importing CSV..."
 psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
-  "UPDATE public.tasks SET teacher_id = '${NEW_TEACHER_ID}';"
+  "\\copy public.tasks FROM '${TMP}/tasks_mapped.csv' WITH (FORMAT csv, HEADER true)"
+psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+  "\\copy public.task_answers FROM '${TMP}/answers.csv' WITH (FORMAT csv, HEADER true)"
 
 echo "6) Counts:"
 psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 <<SQL
