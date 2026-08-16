@@ -14,8 +14,25 @@ set -euo pipefail
 : "${TEACHER_EMAIL:?Set TEACHER_EMAIL (same email you use to log in)}"
 
 need() { command -v "$1" >/dev/null || { echo "Missing: $1" >&2; exit 1; }; }
-need pg_dump
 need psql
+
+# Prefer pg_dump that is >= Supabase major (often 17).
+PG_DUMP_BIN=""
+for candidate in \
+  /usr/lib/postgresql/17/bin/pg_dump \
+  /usr/lib/postgresql/16/bin/pg_dump \
+  "$(command -v pg_dump || true)"
+do
+  if [[ -n "$candidate" && -x "$candidate" ]]; then
+    PG_DUMP_BIN="$candidate"
+    break
+  fi
+done
+if [[ -z "$PG_DUMP_BIN" ]]; then
+  echo "Missing pg_dump. Install: sudo apt-get install -y postgresql-client-17" >&2
+  exit 1
+fi
+echo "Using pg_dump: $PG_DUMP_BIN ($("$PG_DUMP_BIN" --version))"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
