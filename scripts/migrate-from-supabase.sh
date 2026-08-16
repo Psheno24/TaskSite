@@ -1,38 +1,20 @@
 #!/usr/bin/env bash
 # Copy tasks + answers from Supabase → local Postgres (VPS).
-# Does NOT switch the live app. Teacher must already exist on the target DB.
+# Uses psql \COPY (no pg_dump version matching).
 #
-# Usage on VPS:
-#   export SOURCE_DATABASE_URL='postgresql://postgres.[ref]:[PASSWORD]@db.[ref].supabase.co:5432/postgres'
-#   export TARGET_DATABASE_URL='postgresql://tasksite:TaskSiteDb2026@127.0.0.1:5432/tasksite'
-#   export TEACHER_EMAIL='mvikhareva@icloud.com'
+# Usage:
+#   TEACHER_EMAIL='...' \
+#   TARGET_DATABASE_URL='postgresql://tasksite:...@127.0.0.1:5432/tasksite' \
+#   SOURCE_DATABASE_URL='postgresql://postgres:...@db.xxx.supabase.co:5432/postgres?sslmode=require' \
 #   bash scripts/migrate-from-supabase.sh
 set -euo pipefail
 
 : "${SOURCE_DATABASE_URL:?Set SOURCE_DATABASE_URL (Supabase DB URI)}"
 : "${TARGET_DATABASE_URL:?Set TARGET_DATABASE_URL (VPS Postgres URI)}"
-: "${TEACHER_EMAIL:?Set TEACHER_EMAIL (same email you use to log in)}"
+: "${TEACHER_EMAIL:?Set TEACHER_EMAIL}"
 
 need() { command -v "$1" >/dev/null || { echo "Missing: $1" >&2; exit 1; }; }
 need psql
-
-# Prefer pg_dump that is >= Supabase major (often 17).
-PG_DUMP_BIN=""
-for candidate in \
-  /usr/lib/postgresql/17/bin/pg_dump \
-  /usr/lib/postgresql/16/bin/pg_dump \
-  "$(command -v pg_dump || true)"
-do
-  if [[ -n "$candidate" && -x "$candidate" ]]; then
-    PG_DUMP_BIN="$candidate"
-    break
-  fi
-done
-if [[ -z "$PG_DUMP_BIN" ]]; then
-  echo "Missing pg_dump. Install: sudo apt-get install -y postgresql-client-17" >&2
-  exit 1
-fi
-echo "Using pg_dump: $PG_DUMP_BIN ($("$PG_DUMP_BIN" --version))"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -45,32 +27,32 @@ NEW_TEACHER_ID="$(psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -tAc \
 NEW_TEACHER_ID="$(echo "$NEW_TEACHER_ID" | tr -d '[:space:]')"
 if [[ -z "$NEW_TEACHER_ID" ]]; then
   echo "Teacher not found on VPS: $TEACHER_EMAIL" >&2
-  echo "Create first: DATABASE_URL=... npm run create-teacher -- $TEACHER_EMAIL 'password'" >&2
   exit 1
 fi
 echo "   teacher id = $NEW_TEACHER_ID"
 
-echo "2) Exporting tasks + answers from Supabase..."
-pg_dump "$SOURCE_DATABASE_URL" \
-  --data-only \
-  --no-owner \
-  --no-privileges \
-  --table=public.tasks \
-  --table=public.task_answers \
-  -f "$TMP/data.sql"
+echo "2) Exporting from Supabase via COPY..."
+psql "$SOURCE_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+  "\\copy public.tasks TO '${TMP}/tasks.csv' WITH (FORMAT csv, HEADER true)"
+psql "$SOURCE_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+  "\\copy public.task_answers TO '${TMP}/answers.csv' WITH (FORMAT csv, HEADER true)"
 
-echo "3) Clearing old rows on VPS (keeps your teacher user)..."
+echo "   tasks file: $(wc -l < "${TMP}/tasks.csv") lines"
+echo "   answers file: $(wc -l < "${TMP}/answers.csv") lines"
+
+echo "3) Clearing old rows on VPS (keeps teacher)..."
 psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
   "TRUNCATE public.task_answers, public.tasks CASCADE;"
 
-echo "4) Importing (FK checks off temporarily)..."
+echo "4) Importing CSV (FK checks off)..."
 psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 <<SQL
 SET session_replication_role = replica;
-\i $TMP/data.sql
+\\copy public.tasks FROM '${TMP}/tasks.csv' WITH (FORMAT csv, HEADER true)
+\\copy public.task_answers FROM '${TMP}/answers.csv' WITH (FORMAT csv, HEADER true)
 SET session_replication_role = origin;
 SQL
 
-echo "5) Pointing all tasks at your VPS teacher account..."
+echo "5) Pointing all tasks at your VPS teacher..."
 psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
   "UPDATE public.tasks SET teacher_id = '${NEW_TEACHER_ID}';"
 
