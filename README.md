@@ -9,18 +9,22 @@
 - **Next.js 15** (App Router)
 - **TypeScript**
 - **Tailwind CSS**
-- **Supabase** (PostgreSQL + Auth)
-- **Vercel** (деплой)
+- **Supabase** (PostgreSQL + Auth) — облако или self-hosted на VPS
+- **Vercel** (деплой фронта)
+
+> Бесплатный проект на supabase.com уходит на паузу после ~недели без активности.
+> Чтобы этого избежать: **Supabase Pro**, либо перенос стека на свой VPS (код приложения менять не нужно).
+> Подробно: [`deploy/vps/README.md`](deploy/vps/README.md).
 
 ## Быстрый старт
 
 ### 1. Supabase
 
-1. Создайте проект на [supabase.com](https://supabase.com).
+1. Создайте проект на [supabase.com](https://supabase.com) **или** поднимите self-hosted стек на VPS ([инструкция](deploy/vps/README.md)).
 2. Откройте **SQL Editor** и выполните весь скрипт из файла `supabase/schema.sql`.
 3. Создайте преподавателя: **Authentication → Users → Add user** (email + password).
    Триггер автоматически создаст запись в `public.users`.
-4. Скопируйте из **Project Settings → API**:
+4. Скопируйте из **Project Settings → API** (или из `.env` self-hosted):
    - Project URL
    - `anon` public key
    - `service_role` secret key
