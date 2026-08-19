@@ -103,7 +103,7 @@ export function CreateTaskForm() {
 
   if (createdTask) {
     return (
-      <div className="rounded-lg border border-green-200 bg-green-50 p-6 space-y-4">
+      <div className="rounded-2xl border border-green-200 bg-green-50 p-6 shadow-sm space-y-4">
         <p className="font-medium text-green-800">{t("taskCreated")}</p>
         <p className="text-sm text-gray-700">
           <code>/task/{createdTask.slug}</code>
@@ -164,10 +164,8 @@ export function CreateTaskForm() {
             error={errors.htmlContent}
           />
         ) : (
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
-              {t("chooseFile")}
-            </label>
+          <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-2">
+            <label className="block text-sm font-medium text-gray-700">{t("chooseFile")}</label>
             <input
               type="file"
               accept=".html,.htm"
@@ -187,7 +185,7 @@ export function CreateTaskForm() {
       </div>
 
       {htmlWarnings.length > 0 && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 space-y-1">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 space-y-1">
           <p className="font-medium">{t("htmlWarningsTitle")}</p>
           <ul className="list-disc pl-5 space-y-1">
             {htmlWarnings.map((warning) => (

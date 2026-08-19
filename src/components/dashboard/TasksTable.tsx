@@ -78,7 +78,7 @@ export function TasksTable() {
   if (loading) {
     return (
       <div className="space-y-3">
-        <div className="h-10 w-64 animate-pulse rounded-xl bg-gray-200/80" />
+        <div className="h-10 w-64 animate-pulse rounded-2xl bg-gray-200/80" />
         <div className="h-72 animate-pulse rounded-2xl border border-gray-200 bg-white/70" />
       </div>
     );
@@ -104,25 +104,25 @@ export function TasksTable() {
   return (
     <>
       {actionError && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {actionError}
         </div>
       )}
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("dashboard")}</p>
           <p className="mt-1 text-2xl font-semibold text-gray-900">{statusCounts.total}</p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("statusNotStarted")}</p>
           <p className="mt-1 text-2xl font-semibold text-slate-700">{statusCounts.not_started}</p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("statusInProgress")}</p>
           <p className="mt-1 text-2xl font-semibold text-sky-700">{statusCounts.in_progress}</p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("statusCompleted")}</p>
           <p className="mt-1 text-2xl font-semibold text-emerald-700">{statusCounts.completed}</p>
         </div>

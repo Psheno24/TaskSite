@@ -93,7 +93,7 @@ export function TaskViewer({ taskId }: TaskViewerProps) {
         </Link>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-3">
+      <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-white via-white to-slate-50 p-6 shadow-sm space-y-3">
         <div className="flex flex-wrap items-center gap-4">
           <h1 className="text-xl font-semibold text-gray-900">{task.title}</h1>
           <StatusBadge status={task.status} />
