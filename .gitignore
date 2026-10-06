@@ -33,3 +33,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# backup-safe extras
+.env.*
+node_modules/
+*.exe
+*.psd
+target/
