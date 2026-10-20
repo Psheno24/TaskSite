@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
@@ -8,6 +8,71 @@ import { DuplicateTaskModal } from "./DuplicateTaskModal";
 import { useI18n } from "@/lib/i18n/context";
 import { copyToClipboard, formatDate, getTaskUrl } from "@/lib/utils";
 import type { TaskListItem } from "@/types";
+
+type ListEntry =
+  | { kind: "single"; task: TaskListItem }
+  | { kind: "group"; groupId: string; title: string; tasks: TaskListItem[] };
+
+function buildListEntries(tasks: TaskListItem[]): ListEntry[] {
+  const groups = new Map<string, TaskListItem[]>();
+  const singles: TaskListItem[] = [];
+
+  for (const task of tasks) {
+    if (task.group_id) {
+      const list = groups.get(task.group_id) || [];
+      list.push(task);
+      groups.set(task.group_id, list);
+    } else {
+      singles.push(task);
+    }
+  }
+
+  const entries: ListEntry[] = [];
+
+  for (const [groupId, members] of groups) {
+    const sorted = [...members].sort((a, b) => {
+      const aNum = Number(a.student_name);
+      const bNum = Number(b.student_name);
+      if (Number.isFinite(aNum) && Number.isFinite(bNum)) return aNum - bNum;
+      return a.student_name.localeCompare(b.student_name, undefined, {
+        numeric: true,
+      });
+    });
+    entries.push({
+      kind: "group",
+      groupId,
+      title: sorted[0]?.title || "",
+      tasks: sorted,
+    });
+  }
+
+  for (const task of singles) {
+    entries.push({ kind: "single", task });
+  }
+
+  entries.sort((a, b) => {
+    const aDate =
+      a.kind === "group"
+        ? Math.max(...a.tasks.map((task) => Date.parse(task.created_at)))
+        : Date.parse(a.task.created_at);
+    const bDate =
+      b.kind === "group"
+        ? Math.max(...b.tasks.map((task) => Date.parse(task.created_at)))
+        : Date.parse(b.task.created_at);
+    return bDate - aDate;
+  });
+
+  return entries;
+}
+
+function GroupBadge() {
+  const { t } = useI18n();
+  return (
+    <span className="inline-flex whitespace-nowrap rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200">
+      {t("groupBadge")}
+    </span>
+  );
+}
 
 export function TasksTable() {
   const { t } = useI18n();
@@ -17,6 +82,9 @@ export function TasksTable() {
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
+    {}
+  );
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -34,6 +102,8 @@ export function TasksTable() {
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  const entries = useMemo(() => buildListEntries(tasks), [tasks]);
 
   const handleCopy = async (slug: string) => {
     const url = getTaskUrl(slug);
@@ -66,6 +136,10 @@ export function TasksTable() {
     }
   };
 
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
+
   const statusCounts = tasks.reduce(
     (acc, task) => {
       acc.total += 1;
@@ -73,6 +147,98 @@ export function TasksTable() {
       return acc;
     },
     { total: 0, not_started: 0, in_progress: 0, completed: 0 }
+  );
+
+  const renderTaskActions = (task: TaskListItem, compact = false) => (
+    <div className={compact ? "grid grid-cols-3 gap-2" : "flex gap-2"}>
+      <a
+        href={getTaskUrl(task.slug)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={compact ? "col-span-1" : undefined}
+      >
+        <Button variant="secondary" size="sm" className={compact ? "w-full" : undefined}>
+          {t("open")}
+        </Button>
+      </a>
+      <Button
+        variant="secondary"
+        size="sm"
+        className={compact ? "w-full" : undefined}
+        onClick={() => setDuplicateId(task.id)}
+      >
+        {t("duplicate")}
+      </Button>
+      <Button
+        variant="danger"
+        size="sm"
+        className={compact ? "w-full" : undefined}
+        onClick={() => handleDelete(task.id)}
+        disabled={deleteId === task.id}
+      >
+        {t("delete")}
+      </Button>
+    </div>
+  );
+
+  const renderMobileTaskCard = (task: TaskListItem, nested = false) => (
+    <div
+      key={task.id}
+      className={`rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md ${
+        nested ? "ml-3 border-l-4 border-l-indigo-200" : ""
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3">
+        <div className="min-w-0">
+          <h3 className="font-medium text-gray-900 break-words">{task.title}</h3>
+          <p className="mt-1 text-sm text-gray-600">{task.student_name}</p>
+        </div>
+        <StatusBadge status={task.status} />
+      </div>
+
+      <p className="text-xs text-gray-500">
+        {t("createdAt")}: {formatDate(task.created_at)}
+      </p>
+
+      <div className="rounded-xl bg-gray-50 p-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="w-full"
+          onClick={() => handleCopy(task.slug)}
+        >
+          {copiedSlug === task.slug ? t("copied") : t("copyLink")}
+        </Button>
+      </div>
+
+      {renderTaskActions(task, true)}
+    </div>
+  );
+
+  const renderDesktopTaskRow = (task: TaskListItem, nested = false) => (
+    <tr
+      key={task.id}
+      className={`transition hover:bg-gray-50/70 ${nested ? "bg-indigo-50/20" : ""}`}
+    >
+      <td className={`px-4 py-3 font-medium text-gray-900 ${nested ? "pl-8" : ""}`}>
+        {task.title}
+      </td>
+      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+        {task.student_name}
+      </td>
+      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+        {formatDate(task.created_at)}
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        <StatusBadge status={task.status} />
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        <Button variant="secondary" size="sm" onClick={() => handleCopy(task.slug)}>
+          {copiedSlug === task.slug ? t("copied") : t("copyLink")}
+        </Button>
+      </td>
+      <td className="px-4 py-3">{renderTaskActions(task)}</td>
+    </tr>
   );
 
   if (loading) {
@@ -111,86 +277,74 @@ export function TasksTable() {
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("dashboard")}</p>
-          <p className="mt-1 text-2xl font-semibold text-gray-900">{statusCounts.total}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+            {t("dashboard")}
+          </p>
+          <p className="mt-1 text-2xl font-semibold text-gray-900">
+            {statusCounts.total}
+          </p>
         </div>
         <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("statusNotStarted")}</p>
-          <p className="mt-1 text-2xl font-semibold text-slate-700">{statusCounts.not_started}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+            {t("statusNotStarted")}
+          </p>
+          <p className="mt-1 text-2xl font-semibold text-slate-700">
+            {statusCounts.not_started}
+          </p>
         </div>
         <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("statusInProgress")}</p>
-          <p className="mt-1 text-2xl font-semibold text-sky-700">{statusCounts.in_progress}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+            {t("statusInProgress")}
+          </p>
+          <p className="mt-1 text-2xl font-semibold text-sky-700">
+            {statusCounts.in_progress}
+          </p>
         </div>
         <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t("statusCompleted")}</p>
-          <p className="mt-1 text-2xl font-semibold text-emerald-700">{statusCounts.completed}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+            {t("statusCompleted")}
+          </p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-700">
+            {statusCounts.completed}
+          </p>
         </div>
       </div>
 
       {/* Mobile: cards */}
       <div className="space-y-3 md:hidden">
-        {tasks.map((task) => (
-          <div
-            key={task.id}
-            className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md"
-          >
-            <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3">
-              <div className="min-w-0">
-                <h3 className="font-medium text-gray-900 break-words">
-                  {task.title}
-                </h3>
-                <p className="mt-1 text-sm text-gray-600">{task.student_name}</p>
+        {entries.map((entry) => {
+          if (entry.kind === "single") {
+            return renderMobileTaskCard(entry.task);
+          }
+
+          const expanded = !!expandedGroups[entry.groupId];
+          return (
+            <div key={entry.groupId} className="space-y-2">
+              <div className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-medium text-gray-900 break-words">
+                    {entry.title}
+                  </h3>
+                  <GroupBadge />
+                </div>
+                <p className="mt-1 text-sm text-gray-500">
+                  {entry.tasks.length} {t("groupMembersCount")}
+                </p>
+                <div className="mt-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => toggleGroup(entry.groupId)}
+                  >
+                    {expanded ? t("collapseGroup") : t("expandGroup")}
+                  </Button>
+                </div>
               </div>
-              <StatusBadge status={task.status} />
+              {expanded &&
+                entry.tasks.map((task) => renderMobileTaskCard(task, true))}
             </div>
-
-            <p className="text-xs text-gray-500">
-              {t("createdAt")}: {formatDate(task.created_at)}
-            </p>
-
-            <div className="rounded-xl bg-gray-50 p-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                className="w-full"
-                onClick={() => handleCopy(task.slug)}
-              >
-                {copiedSlug === task.slug ? t("copied") : t("copyLink")}
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <a
-                href={getTaskUrl(task.slug)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="col-span-1"
-              >
-                <Button variant="secondary" size="sm" className="w-full">
-                  {t("open")}
-                </Button>
-              </a>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="w-full"
-                onClick={() => setDuplicateId(task.id)}
-              >
-                {t("duplicate")}
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                className="w-full"
-                onClick={() => handleDelete(task.id)}
-                disabled={deleteId === task.id}
-              >
-                {t("delete")}
-              </Button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Desktop: table */}
@@ -219,59 +373,41 @@ export function TasksTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 bg-white">
-            {tasks.map((task) => (
-              <tr key={task.id} className="transition hover:bg-gray-50/70">
-                <td className="px-4 py-3 font-medium text-gray-900">
-                  {task.title}
-                </td>
-                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                  {task.student_name}
-                </td>
-                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                  {formatDate(task.created_at)}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <StatusBadge status={task.status} />
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleCopy(task.slug)}
-                  >
-                    {copiedSlug === task.slug ? t("copied") : t("copyLink")}
-                  </Button>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-2">
-                    <a
-                      href={getTaskUrl(task.slug)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Button variant="secondary" size="sm">
-                        {t("open")}
+            {entries.map((entry) => {
+              if (entry.kind === "single") {
+                return renderDesktopTaskRow(entry.task);
+              }
+
+              const expanded = !!expandedGroups[entry.groupId];
+              return (
+                <Fragment key={entry.groupId}>
+                  <tr className="bg-indigo-50/40 transition hover:bg-indigo-50/70">
+                    <td className="px-4 py-3" colSpan={5}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-gray-900">
+                          {entry.title}
+                        </span>
+                        <GroupBadge />
+                        <span className="text-sm text-gray-500">
+                          {entry.tasks.length} {t("groupMembersCount")}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => toggleGroup(entry.groupId)}
+                      >
+                        {expanded ? t("collapseGroup") : t("expandGroup")}
                       </Button>
-                    </a>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setDuplicateId(task.id)}
-                    >
-                      {t("duplicate")}
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleDelete(task.id)}
-                      disabled={deleteId === task.id}
-                    >
-                      {t("delete")}
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                    </td>
+                  </tr>
+                  {expanded &&
+                    entry.tasks.map((task) => renderDesktopTaskRow(task, true))}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

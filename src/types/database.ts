@@ -39,6 +39,7 @@ export type Database = {
           html_content: string;
           status: Database["public"]["Enums"]["task_status"];
           teacher_id: string;
+          group_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -50,6 +51,7 @@ export type Database = {
           html_content: string;
           status?: Database["public"]["Enums"]["task_status"];
           teacher_id: string;
+          group_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -61,6 +63,7 @@ export type Database = {
           html_content?: string;
           status?: Database["public"]["Enums"]["task_status"];
           teacher_id?: string;
+          group_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };

@@ -26,6 +26,8 @@ export function handleRouteError(error: unknown) {
 
 export const MAX_HTML_SIZE = 2 * 1024 * 1024; // 2 MB
 export const MAX_ANSWERS_JSON_SIZE = 512 * 1024; // 512 KB
+export const MAX_GROUP_MEMBERS = 50;
+export const MIN_GROUP_MEMBERS = 2;
 
 export function validateSlug(slug: string): boolean {
   return /^[0-9a-z]{12}$/.test(slug);

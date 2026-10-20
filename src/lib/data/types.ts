@@ -12,6 +12,7 @@ export type CreateTaskData = {
   student_name: string;
   html_content: string;
   teacher_id: string;
+  group_id?: string | null;
 };
 
 export type PublicTaskView = {
@@ -41,6 +42,7 @@ export type DataAccess = "user" | "service";
 export interface TaskStore {
   listForTeacher(teacherId: string): Promise<TaskListItem[]>;
   create(data: CreateTaskData): Promise<Task>;
+  createMany(items: CreateTaskData[]): Promise<Task[]>;
   getForTeacher(id: string, teacherId: string): Promise<Task | null>;
   getTitleHtmlForTeacher(
     id: string,

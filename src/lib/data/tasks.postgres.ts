@@ -23,6 +23,7 @@ function mapTask(row: typeof tasks.$inferSelect): Task {
     html_content: row.htmlContent,
     status: row.status,
     teacher_id: row.teacherId,
+    group_id: row.groupId ?? null,
     created_at: toIso(row.createdAt),
     updated_at: toIso(row.updatedAt),
   };
@@ -35,6 +36,7 @@ function mapListItem(row: typeof tasks.$inferSelect): TaskListItem {
     title: row.title,
     student_name: row.studentName,
     status: row.status,
+    group_id: row.groupId ?? null,
     created_at: toIso(row.createdAt),
     updated_at: toIso(row.updatedAt),
   };
@@ -52,35 +54,53 @@ export const postgresTaskStore: TaskStore = {
     return rows.map(mapListItem);
   },
 
-  async create(data: CreateTaskData) {
+  async createMany(items: CreateTaskData[]) {
+    if (items.length === 0) return [];
+
     const db = getDb();
 
     const inserted = await db.transaction(async (tx) => {
-      const [task] = await tx
-        .insert(tasks)
-        .values({
-          slug: data.slug,
-          title: data.title,
-          studentName: data.student_name,
-          htmlContent: data.html_content,
-          teacherId: data.teacher_id,
-          status: "not_started",
-        })
-        .returning();
+      const created: Array<typeof tasks.$inferSelect> = [];
 
-      if (!task) {
-        throw new Error("Failed to create task");
+      for (const data of items) {
+        const [task] = await tx
+          .insert(tasks)
+          .values({
+            slug: data.slug,
+            title: data.title,
+            studentName: data.student_name,
+            htmlContent: data.html_content,
+            teacherId: data.teacher_id,
+            groupId: data.group_id ?? null,
+            status: "not_started",
+          })
+          .returning();
+
+        if (!task) {
+          throw new Error("Failed to create task");
+        }
+
+        await tx.insert(taskAnswers).values({
+          taskId: task.id,
+          answers: {},
+        });
+
+        created.push(task);
       }
 
-      await tx.insert(taskAnswers).values({
-        taskId: task.id,
-        answers: {},
-      });
-
-      return task;
+      return created;
     });
 
-    return mapTask(inserted);
+    return inserted.map(mapTask);
+  },
+
+  async create(data: CreateTaskData) {
+    const created = await postgresTaskStore.createMany([data]);
+    const task = created[0];
+    if (!task) {
+      throw new Error("Failed to create task");
+    }
+    return task;
   },
 
   async getForTeacher(id, teacherId) {
