@@ -8,7 +8,11 @@ import type {
 } from "./types";
 
 function mapTask(row: Record<string, unknown>): Task {
-  return row as unknown as Task;
+  const task = row as unknown as Task;
+  return {
+    ...task,
+    group_id: task.group_id ?? null,
+  };
 }
 
 async function getClient(access: DataAccess = "user") {
@@ -23,43 +27,74 @@ export const supabaseTaskStore: TaskStore = {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("tasks")
-      .select("id, slug, title, student_name, status, created_at, updated_at")
+      .select("id, slug, title, student_name, status, group_id, created_at, updated_at")
       .eq("teacher_id", teacherId)
       .order("created_at", { ascending: false });
 
     if (error) throw new Error(error.message);
-    return (data || []) as TaskListItem[];
+    return ((data || []) as TaskListItem[]).map((item) => ({
+      ...item,
+      group_id: item.group_id ?? null,
+    }));
+  },
+
+  async createMany(items) {
+    if (items.length === 0) return [];
+
+    const supabase = await createClient();
+    const createdIds: string[] = [];
+
+    try {
+      const created: Task[] = [];
+
+      for (const data of items) {
+        const { data: task, error: taskError } = await supabase
+          .from("tasks")
+          .insert({
+            slug: data.slug,
+            title: data.title,
+            student_name: data.student_name,
+            html_content: data.html_content,
+            teacher_id: data.teacher_id,
+            group_id: data.group_id ?? null,
+            status: "not_started",
+          })
+          .select()
+          .single();
+
+        if (taskError || !task) {
+          throw new Error(taskError?.message || "Failed to create task");
+        }
+
+        createdIds.push(task.id);
+
+        const { error: answersError } = await supabase
+          .from("task_answers")
+          .insert({ task_id: task.id, answers: {} });
+
+        if (answersError) {
+          throw new Error(answersError.message);
+        }
+
+        created.push(mapTask(task));
+      }
+
+      return created;
+    } catch (error) {
+      if (createdIds.length > 0) {
+        await supabase.from("tasks").delete().in("id", createdIds);
+      }
+      throw error;
+    }
   },
 
   async create(data) {
-    const supabase = await createClient();
-    const { data: task, error: taskError } = await supabase
-      .from("tasks")
-      .insert({
-        slug: data.slug,
-        title: data.title,
-        student_name: data.student_name,
-        html_content: data.html_content,
-        teacher_id: data.teacher_id,
-        status: "not_started",
-      })
-      .select()
-      .single();
-
-    if (taskError || !task) {
-      throw new Error(taskError?.message || "Failed to create task");
+    const created = await supabaseTaskStore.createMany([data]);
+    const task = created[0];
+    if (!task) {
+      throw new Error("Failed to create task");
     }
-
-    const { error: answersError } = await supabase
-      .from("task_answers")
-      .insert({ task_id: task.id, answers: {} });
-
-    if (answersError) {
-      await supabase.from("tasks").delete().eq("id", task.id);
-      throw new Error(answersError.message);
-    }
-
-    return mapTask(task);
+    return task;
   },
 
   async getForTeacher(id, teacherId) {

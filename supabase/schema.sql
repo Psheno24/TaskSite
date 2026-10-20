@@ -26,6 +26,7 @@ CREATE TABLE public.tasks (
   html_content TEXT NOT NULL,
   status public.task_status NOT NULL DEFAULT 'not_started',
   teacher_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  group_id UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -44,6 +45,7 @@ CREATE TABLE public.task_answers (
 CREATE INDEX idx_tasks_teacher_id ON public.tasks(teacher_id);
 CREATE INDEX idx_tasks_slug ON public.tasks(slug);
 CREATE INDEX idx_tasks_created_at ON public.tasks(created_at DESC);
+CREATE INDEX idx_tasks_group_id ON public.tasks(group_id);
 CREATE INDEX idx_task_answers_task_id ON public.task_answers(task_id);
 
 -- ============================================================

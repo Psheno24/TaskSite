@@ -11,6 +11,7 @@ export interface Task {
   html_content: string;
   status: TaskStatus;
   teacher_id: string;
+  group_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -26,14 +27,23 @@ export interface TaskListItem {
   title: string;
   student_name: string;
   status: TaskStatus;
+  group_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
+export interface CreateTaskMemberInput {
+  student_name?: string;
+  slug?: string;
+}
+
 export interface CreateTaskInput {
   title: string;
-  student_name: string;
   html_content: string;
+  student_name?: string;
+  /** When true, create multiple copies linked by group_id. */
+  is_group?: boolean;
+  members?: CreateTaskMemberInput[];
 }
 
 export interface DuplicateTaskInput {

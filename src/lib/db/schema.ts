@@ -35,6 +35,7 @@ export const tasks = pgTable(
     teacherId: uuid("teacher_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    groupId: uuid("group_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -42,6 +43,7 @@ export const tasks = pgTable(
     index("idx_tasks_teacher_id").on(table.teacherId),
     index("idx_tasks_slug").on(table.slug),
     index("idx_tasks_created_at").on(table.createdAt),
+    index("idx_tasks_group_id").on(table.groupId),
   ]
 );
 
