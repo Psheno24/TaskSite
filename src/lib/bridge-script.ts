@@ -179,10 +179,225 @@ export const BRIDGE_SCRIPT = `
     if (el.id) return el.id;
     if (el.dataset && el.dataset.answerId) return el.dataset.answerId;
     if (el.dataset && el.dataset.questionId) return el.dataset.questionId;
+    // Revision-style sheets: <input data-g="N"> / <textarea data-g="N">
+    if (el.getAttribute) {
+      var dataG = el.getAttribute("data-g");
+      if (dataG != null && dataG !== "") return "g:" + dataG;
+      var dataA = el.getAttribute("data-a");
+      if (dataA != null && dataA !== "") return "a:" + dataA;
+      var dataF = el.getAttribute("data-f");
+      var dataK = el.getAttribute("data-k");
+      if (dataF != null && dataK != null) return "free:" + dataF + ":" + dataK;
+    }
     if (el.getAttribute && el.getAttribute("aria-label")) {
       return "aria:" + el.getAttribute("aria-label");
     }
     return ensureBridgeId(el);
+  }
+
+  function cleanSlotText(text) {
+    return String(text || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function sheetElements(selector) {
+    try {
+      return Array.prototype.slice.call(document.querySelectorAll(selector));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function clickSheetElement(el) {
+    if (!el) return;
+    try {
+      if (typeof el.click === "function") el.click();
+    } catch (e) {}
+  }
+
+  function dispatchFieldEvents(el) {
+    try {
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    } catch (e) {}
+  }
+
+  /** Collect answers from span-based worksheets (.slot / .opt / .chip / .build). */
+  function collectSpanSheet(answers) {
+    var slots = sheetElements(".slot");
+    slots.forEach(function (slot) {
+      var id = slot.getAttribute("data-g");
+      if (id == null) id = slot.getAttribute("data-a");
+      if (id == null) return;
+      var key = slot.getAttribute("data-g") != null ? "g:" + id : "a:" + id;
+      var text = cleanSlotText(slot.textContent);
+      if (text) answers[key] = text;
+    });
+
+    // Choice chips marked .on (when slot text was cleared but class remains)
+    var opts = sheetElements(".opt.on, .copt.on");
+    opts.forEach(function (opt) {
+      var id = opt.getAttribute("data-g");
+      if (id == null) id = opt.getAttribute("data-a");
+      if (id == null) return;
+      var key = opt.getAttribute("data-g") != null ? "g:" + id : "a:" + id;
+      if (answers[key]) return;
+      var text = cleanSlotText(opt.textContent);
+      if (text) answers[key] = text;
+    });
+
+    // Word-order builders: sequence of .w inside .build
+    var builds = sheetElements(".build[data-g], .build[data-a]");
+    builds.forEach(function (build) {
+      var id = build.getAttribute("data-g");
+      if (id == null) id = build.getAttribute("data-a");
+      if (id == null) return;
+      var key = build.getAttribute("data-g") != null ? "g:" + id : "a:" + id;
+      var words = [];
+      var kids = build.querySelectorAll(".w");
+      for (var i = 0; i < kids.length; i++) {
+        var w = cleanSlotText(kids[i].textContent);
+        if (w) words.push(w);
+      }
+      if (words.length) answers[key] = words.join(" ");
+    });
+  }
+
+  function applySpanSheet(answers, onlyEmpty) {
+    if (!answers || typeof answers !== "object") return;
+
+    Object.keys(answers).forEach(function (key) {
+      var id = null;
+      if (key.indexOf("g:") === 0) id = key.slice(2);
+      else if (key.indexOf("a:") === 0) id = key.slice(2);
+      else return;
+
+      var value = answers[key];
+      var text = cleanSlotText(value);
+      if (!text && onlyEmpty) return;
+
+      var slot =
+        document.querySelector('.slot[data-g="' + id + '"]') ||
+        document.querySelector('.slot[data-a="' + id + '"]');
+
+      if (slot) {
+        var current = cleanSlotText(slot.textContent);
+        if (current === text) {
+          // Still sync .opt.on highlight
+        } else if (!(onlyEmpty && current)) {
+          if (text) {
+            // Prefer clicking matching .opt / .chip so task JS (G/setSlot) stays in sync
+            var matched = null;
+            var group = sheetElements(
+              '.opt[data-g="' + id + '"], .copt[data-a="' + id + '"], .opt[data-a="' + id + '"]'
+            );
+            for (var i = 0; i < group.length; i++) {
+              if (cleanSlotText(group[i].textContent) === text) {
+                matched = group[i];
+                break;
+              }
+            }
+            if (matched) {
+              clickSheetElement(matched);
+            } else {
+              // Gap + chip bank: activate slot then chip
+              clickSheetElement(slot);
+              var chips = sheetElements(".chip");
+              for (var c = 0; c < chips.length; c++) {
+                if (cleanSlotText(chips[c].textContent) !== text) continue;
+                clickSheetElement(chips[c]);
+                break;
+              }
+              if (!cleanSlotText(slot.textContent)) {
+                slot.textContent = text;
+                slot.classList.add("filled");
+              }
+            }
+          } else {
+            // Clear via slot click when filled, else force DOM clear
+            if (cleanSlotText(slot.textContent)) {
+              clickSheetElement(slot);
+            }
+            if (cleanSlotText(slot.textContent)) {
+              slot.textContent = "\u00a0";
+              slot.classList.remove("filled");
+            }
+            sheetElements(
+              '.opt[data-g="' + id + '"], .opt[data-a="' + id + '"]'
+            ).forEach(function (o) {
+              o.classList.remove("on");
+            });
+          }
+        }
+      }
+
+      // Sync .opt.on for choice items
+      var optGroup = sheetElements(
+        '.opt[data-g="' + id + '"], .copt[data-a="' + id + '"], .opt[data-a="' + id + '"]'
+      );
+      if (optGroup.length && text) {
+        var already = null;
+        for (var o = 0; o < optGroup.length; o++) {
+          if (
+            optGroup[o].classList.contains("on") &&
+            cleanSlotText(optGroup[o].textContent) === text
+          ) {
+            already = optGroup[o];
+            break;
+          }
+        }
+        var hasSelected = false;
+        for (var s = 0; s < optGroup.length; s++) {
+          if (optGroup[s].classList.contains("on")) hasSelected = true;
+        }
+        if (!already && !(onlyEmpty && hasSelected)) {
+          for (var n = 0; n < optGroup.length; n++) {
+            if (cleanSlotText(optGroup[n].textContent) === text) {
+              clickSheetElement(optGroup[n]);
+              break;
+            }
+          }
+        }
+      }
+
+      // Order builders
+      var build =
+        document.querySelector('.build[data-g="' + id + '"]') ||
+        document.querySelector('.build[data-a="' + id + '"]');
+      if (build && text) {
+        var wanted = text.split(/\s+/);
+        var currentWords = [];
+        build.querySelectorAll(".w").forEach(function (w) {
+          currentWords.push(cleanSlotText(w.textContent));
+        });
+        if (currentWords.join(" ") !== wanted.join(" ")) {
+          if (!(onlyEmpty && currentWords.length)) {
+            // Reset: move all words back to pool, then click in order
+            var pool =
+              document.querySelector('.pool[data-g="' + id + '"]') ||
+              document.querySelector('.pool[data-a="' + id + '"]');
+            if (pool) {
+              sheetElements(
+                '.build[data-g="' + id + '"] .w, .build[data-a="' + id + '"] .w'
+              ).forEach(function (w) {
+                pool.appendChild(w);
+              });
+              wanted.forEach(function (word) {
+                var candidates = pool.querySelectorAll(".w");
+                for (var wi = 0; wi < candidates.length; wi++) {
+                  if (cleanSlotText(candidates[wi].textContent) === word) {
+                    clickSheetElement(candidates[wi]);
+                    break;
+                  }
+                }
+              });
+            }
+          }
+        }
+      }
+    });
   }
 
   function getFieldValue(el) {
@@ -298,6 +513,8 @@ export const BRIDGE_SCRIPT = `
       if (checkboxGroups[k].length > 0) answers[k] = checkboxGroups[k];
     });
 
+    collectSpanSheet(answers);
+
     return answers;
   }
 
@@ -318,6 +535,7 @@ export const BRIDGE_SCRIPT = `
     });
 
     applyQuizButtonAnswers(answers, onlyEmpty);
+    applySpanSheet(answers, onlyEmpty);
 
     var fields = getAllFields();
 
@@ -370,6 +588,7 @@ export const BRIDGE_SCRIPT = `
 
       if (String(getFieldValue(el)) === String(value)) return;
       setFieldValue(el, value);
+      dispatchFieldEvents(el);
     });
 
     isRestoring = false;
